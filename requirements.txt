@@ -1,0 +1,7 @@
+git+https://github.com/huggingface/transformers@v4.56.0-Embedding-Gemma-preview
+sentence-transformers>=5.0.0 
+faiss-cpu 
+torch 
+paddleocr 
+opencv-python 
+pymupdf
