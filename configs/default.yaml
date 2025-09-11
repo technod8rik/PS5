@@ -1,0 +1,28 @@
+# DocuAgent Default Configuration
+
+device: "auto"  # "cuda" | "cpu" | "auto"
+dpi: 220
+
+layout:
+  model: "pp_doclayout_l"  # "pp_doclayout_l" | "yolov10"
+  conf_threshold: 0.25
+  classes: ["Text", "Title", "List", "Table", "Figure"]
+
+ocr:
+  lang: "ml"  # multilingual
+
+langid:
+  model_path: ".cache/lid.176.bin"
+
+vlm:
+  model: "Qwen/Qwen2-VL-7B-Instruct"
+
+describe:
+  batch_size: 2
+
+io:
+  cache_dir: ".cache"
+  debug_dir: "./debug"
+
+runtime:
+  num_workers: 4
