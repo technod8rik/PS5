@@ -139,7 +139,7 @@ class OCRLang:
             avg_confidence = 0.0
         
         # Language identification
-        language = self._identify_language(combined_text)
+        language, lang_confidence = self._identify_language(combined_text)
         
         return Element(
             page=page_idx,
@@ -151,31 +151,42 @@ class OCRLang:
                 "source": "paddle_ocr",
                 "confidence": avg_confidence,
                 "text_lines": len(text_lines),
-                "layout_confidence": box.score
+                "layout_confidence": box.score,
+                "lang_confidence": lang_confidence
             }
         )
     
-    def _identify_language(self, text: str) -> Optional[str]:
-        """Identify language of text using fastText."""
+    def _identify_language(self, text: str) -> Tuple[Optional[str], float]:
+        """Identify language of text using fastText.
+        
+        Returns:
+            Tuple of (language_code, confidence)
+        """
         if not text or not self.langid_model:
-            return None
+            return None, 0.0
         
         try:
             # Clean text for language ID
             clean_text = text.strip()
             if len(clean_text) < 3:  # Too short for reliable language ID
-                return None
+                return None, 0.0
             
             # Get language prediction
             prediction = self.langid_model.predict(clean_text)
             if prediction and len(prediction) > 0:
-                # Extract language code (remove __label__ prefix)
+                # Extract language code and confidence
                 lang_code = prediction[0][0].replace("__label__", "")
-                return lang_code
+                confidence = prediction[0][1] if len(prediction[0]) > 1 else 1.0
+                
+                # Threshold for confidence
+                if confidence < 0.55:
+                    return "unknown", confidence
+                
+                return lang_code, confidence
         except Exception as e:
             print(f"[WARN] Language ID failed: {e}")
         
-        return None
+        return None, 0.0
     
     def _save_debug_ocr(self, elements: List[Element], page_idx: int):
         """Save debug OCR results as TSV."""

@@ -26,3 +26,30 @@ io:
 
 runtime:
   num_workers: 4
+
+# Training configuration
+train:
+  backend: "yolov10"  # "yolov10" | "pp_doclayout_l"
+  data_root: "./data"
+  classes: ["Text", "Title", "List", "Table", "Figure"]
+  imgsz: 960
+  epochs: 60
+  batch: 16
+  lr0: 0.01
+  conf_thr: 0.25
+  iou_nms: 0.5
+  val_every: 1
+  yolo_model: "yolov10n.pt"  # changeable to s/m/l
+
+# Evaluation configuration
+eval:
+  cer_wer: true
+  bleu_bertscore: true
+  save_overlays: true
+  topk_errors: 150
+
+# Paths
+paths:
+  weights_dir: "./weights"
+  runs_dir: "./runs"
+  debug_dir: "./debug"

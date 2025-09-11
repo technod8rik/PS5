@@ -163,6 +163,81 @@ tests/
 - Debug outputs are saved to the `debug` directory
 - The pipeline gracefully handles missing models with clear error messages
 
+## Training and Evaluation
+
+### Data Processing
+
+Convert between COCO and YOLO formats:
+
+```bash
+# Convert COCO to YOLO
+python cli.py data coco-to-yolo --coco data/anno.json --images data/images --out data/yolo --classes Text Title List Table Figure
+
+# Convert YOLO to COCO
+python cli.py data yolo-to-coco --images data/yolo/images --labels data/yolo/labels --out data/coco.json --classes Text Title List Table Figure
+
+# Split dataset
+python cli.py data split --coco data/anno.json --out data/splits --train 0.8 --val 0.1 --test 0.1
+
+# Create balanced subset
+python cli.py data subset --coco data/anno.json --out data/subset.json --per-class 200
+```
+
+### Model Training
+
+Train layout detection models:
+
+```bash
+# Train YOLO model
+python cli.py train yolo --coco data/splits/train.json --images data/images --val data/splits/val.json \
+  --imgsz 960 --epochs 60 --batch 16 --model yolov10n.pt --project runs/doclayout --name seed
+
+# PP-DocLayout training (stub)
+python cli.py train ppdoc --config configs/default.yaml
+```
+
+### Evaluation
+
+Evaluate model performance:
+
+```bash
+# COCO metrics
+python cli.py eval coco --gt data/splits/val.json --pred runs/doclayout/seed/preds_val.json --out out/eval
+
+# Text processing metrics
+python cli.py eval text --gt data/splits/val.json --pred runs/doclayout/seed/preds_val.json --images data/images --out out/eval
+
+# Language ID metrics
+python cli.py eval langid --csv data/langid_val.csv --out out/eval
+
+# Description quality metrics
+python cli.py eval desc --pred out/sample.elements.json --refs data/descriptions_refs.json --out out/eval
+```
+
+### Visualization
+
+Create error analysis overlays:
+
+```bash
+# Error overlays
+python cli.py viz overlays --images data/images --gt data/splits/val.json --pred runs/doclayout/seed/preds_val.json --out debug/overlays
+```
+
 ## Integration with RAG
 
 This pipeline extends the existing RAG starter (`starter.py`) by providing enhanced document processing capabilities. The generated JSON can be directly used with the existing FAISS-based search functionality.
+
+## Training Workflow
+
+1. **Prepare Data**: Convert your annotations to COCO format
+2. **Split Dataset**: Create train/val/test splits
+3. **Train Model**: Train YOLO or PP-DocLayout model
+4. **Evaluate**: Run comprehensive evaluation metrics
+5. **Deploy**: Use trained weights in production pipeline
+
+## Evaluation Metrics
+
+- **Layout Detection**: mAP@0.5, mAP@0.5:0.95, per-class AP
+- **Text Processing**: Character Error Rate (CER), Word Error Rate (WER)
+- **Language ID**: Accuracy, confusion matrix, per-language metrics
+- **Description Quality**: BLEU score, BERTScore for VLM outputs

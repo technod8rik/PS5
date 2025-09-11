@@ -50,8 +50,19 @@ class LayoutDetector:
         """Initialize YOLOv10 backend via ultralytics."""
         try:
             from ultralytics import YOLO
-            # Use a general YOLO model for now - in production, use a layout-specific model
-            self.model = YOLO('yolov10n.pt')  # Lightweight model
+            
+            # Check for trained weights
+            weights_dir = Path(self.cfg["paths"]["weights_dir"])
+            trained_weights = weights_dir / "doclayout_yolov10_best.pt"
+            
+            if trained_weights.exists():
+                print(f"[INFO] Loading trained weights: {trained_weights}")
+                self.model = YOLO(str(trained_weights))
+            else:
+                print(f"[WARN] Trained weights not found at {trained_weights}")
+                print("[WARN] Using pre-trained model. Run 'docuagent train yolo' to train custom weights.")
+                self.model = YOLO('yolov10n.pt')  # Lightweight model
+            
             self.backend = "yolov10"
             print("[INFO] Using YOLOv10 backend")
         except ImportError:
