@@ -207,3 +207,5 @@ def crop_image_by_bbox(image: np.ndarray, bbox: tuple[int, int, int, int]) -> np
     """
     x, y, w, h = bbox
     return image[y:y+h, x:x+w]
+
+#working
