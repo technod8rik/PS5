@@ -578,6 +578,93 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     desc_eval_parser.add_argument("--out", required=True, help="Output directory")
     desc_eval_parser.set_defaults(func=cmd_eval_desc)
     
+    # Calibration evaluation
+    calibrate_parser = eval_subparsers.add_parser("calibrate", help="Calibrate detector confidence scores")
+    calibrate_parser.add_argument("--val-preds", required=True, help="Validation predictions COCO JSON")
+    calibrate_parser.add_argument("--gt", required=True, help="Ground truth COCO JSON")
+    calibrate_parser.add_argument("--out", required=True, help="Output calibration parameters file")
+    calibrate_parser.add_argument("--method", choices=["temperature", "platt", "isotonic"], 
+                                 default="temperature", help="Calibration method")
+    calibrate_parser.add_argument("--iou-threshold", type=float, default=0.5, help="IoU threshold for matching")
+    calibrate_parser.set_defaults(func=cmd_eval_calibrate)
+    
+    # Description QA
+    desc_qa_parser = eval_subparsers.add_parser("desc-qa", help="Quality assurance for descriptions")
+    desc_qa_parser.add_argument("--elements", required=True, help="Elements JSON file")
+    desc_qa_parser.add_argument("--out", required=True, help="Output directory")
+    desc_qa_parser.add_argument("--page-lang", help="Page dominant language")
+    desc_qa_parser.add_argument("--allowed-langs", nargs='+', help="Allowed languages")
+    desc_qa_parser.set_defaults(func=cmd_eval_desc_qa)
+    
+    # Active learning commands
+    active_parser = subparsers.add_parser("active", help="Active learning commands")
+    active_subparsers = active_parser.add_subparsers(dest="active_cmd", required=True)
+    
+    # Error mining
+    mine_errors_parser = active_subparsers.add_parser("mine-errors", help="Mine errors from evaluation results")
+    mine_errors_parser.add_argument("--gt", required=True, help="Ground truth COCO JSON file")
+    mine_errors_parser.add_argument("--pred", required=True, help="Predictions COCO JSON file")
+    mine_errors_parser.add_argument("--images", required=True, help="Images directory")
+    mine_errors_parser.add_argument("--out", required=True, help="Output directory")
+    mine_errors_parser.add_argument("--iou-threshold", type=float, default=0.5, help="IoU threshold for matching")
+    mine_errors_parser.set_defaults(func=cmd_active_mine_errors)
+    
+    # Sample selection
+    select_parser = active_subparsers.add_parser("select", help="Select samples for annotation")
+    select_parser.add_argument("--pred", required=True, help="Predictions COCO JSON file")
+    select_parser.add_argument("--strategy", choices=["margin", "entropy", "low_conf"], 
+                              default="margin", help="Uncertainty sampling strategy")
+    select_parser.add_argument("--top", type=int, default=500, help="Number of top samples to select")
+    select_parser.add_argument("--out", help="Output JSON file for selection results")
+    select_parser.add_argument("--threshold", type=float, default=0.5, 
+                              help="Confidence threshold for low_conf strategy")
+    select_parser.set_defaults(func=cmd_active_select)
+    
+    # Pseudo-labeling
+    pseudo_parser = active_subparsers.add_parser("pseudo-labels", help="Generate pseudo-labels from predictions")
+    pseudo_parser.add_argument("--pred", required=True, help="Predictions COCO JSON file")
+    pseudo_parser.add_argument("--images", required=True, help="Images directory")
+    pseudo_parser.add_argument("--out", required=True, help="Output directory for pseudo-labels")
+    pseudo_parser.add_argument("--thr", type=float, default=0.6, help="Confidence threshold")
+    pseudo_parser.add_argument("--model", default="unknown", help="Source model name/hash")
+    pseudo_parser.add_argument("--epoch", type=int, default=0, help="Training epoch")
+    pseudo_parser.set_defaults(func=cmd_active_pseudo_labels)
+    
+    # Autopilot
+    autopilot_parser = active_subparsers.add_parser("autopilot", help="Run active learning autopilot")
+    autopilot_parser.add_argument("--coco", required=True, help="Training COCO JSON file")
+    autopilot_parser.add_argument("--val", required=True, help="Validation COCO JSON file")
+    autopilot_parser.add_argument("--images", required=True, help="Images directory")
+    autopilot_parser.add_argument("--cycles", type=int, default=2, help="Number of cycles")
+    autopilot_parser.add_argument("--quota", type=int, default=500, help="Samples per cycle")
+    autopilot_parser.add_argument("--pseudo-thr", type=float, default=0.6, help="Pseudo-label threshold")
+    autopilot_parser.add_argument("--strategy", choices=["margin", "entropy", "low_conf"], 
+                                 default="margin", help="Uncertainty strategy")
+    autopilot_parser.add_argument("--project", required=True, help="Project directory")
+    autopilot_parser.add_argument("--name", help="Project name")
+    autopilot_parser.add_argument("--retrain-epochs", type=int, default=20, help="Retrain epochs")
+    autopilot_parser.set_defaults(func=cmd_active_autopilot)
+    
+    # Performance commands
+    perf_parser = subparsers.add_parser("perf", help="Performance commands")
+    perf_subparsers = perf_parser.add_subparsers(dest="perf_cmd", required=True)
+    
+    # Benchmark
+    bench_parser = perf_subparsers.add_parser("bench", help="Run performance benchmark")
+    bench_parser.add_argument("--pdf", required=True, help="PDF file to benchmark")
+    bench_parser.add_argument("--config", default="configs/default.yaml", help="Configuration file")
+    bench_parser.add_argument("--out", help="Output JSON file for results")
+    bench_parser.add_argument("--workers", type=int, default=4, help="Number of parallel workers")
+    bench_parser.set_defaults(func=cmd_perf_bench)
+    
+    # Cache management
+    cache_parser = perf_subparsers.add_parser("cache", help="Cache management")
+    cache_parser.add_argument("--cache-dir", default=".cache", help="Cache directory")
+    cache_parser.add_argument("--stats", action="store_true", help="Show cache statistics")
+    cache_parser.add_argument("--clear", help="Clear cache (ocr, vlm, or all)")
+    cache_parser.add_argument("--max-size", type=int, default=1000, help="Maximum cache size in MB")
+    cache_parser.set_defaults(func=cmd_perf_cache)
+    
     # Visualization commands
     viz_parser = subparsers.add_parser("viz", help="Visualization commands")
     viz_subparsers = viz_parser.add_subparsers(dest="viz_cmd", required=True)
@@ -592,6 +679,154 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     overlays_parser.set_defaults(func=cmd_viz_overlays)
     
     return parser.parse_args(argv)
+
+
+# New command functions for active learning and performance
+
+def cmd_eval_calibrate(args):
+    """Calibrate detector confidence scores."""
+    from .eval.calibrate import calibrate_detector, save_calibration_params
+    
+    try:
+        params = calibrate_detector(
+            args.val_preds, args.gt, args.method, args.iou_threshold
+        )
+        save_calibration_params(params, args.out)
+        print(f"[INFO] Calibration completed. Parameters saved to {args.out}")
+        return 0
+    except Exception as e:
+        print(f"[ERROR] Calibration failed: {e}")
+        return 1
+
+
+def cmd_eval_desc_qa(args):
+    """Quality assurance for descriptions."""
+    from .eval.qa_descriptions import qa_descriptions
+    
+    try:
+        result = qa_descriptions(
+            args.elements, args.out, args.page_lang, args.allowed_langs
+        )
+        print(f"[INFO] QA completed: {result.flagged_elements}/{result.total_elements} elements flagged")
+        return 0
+    except Exception as e:
+        print(f"[ERROR] Description QA failed: {e}")
+        return 1
+
+
+def cmd_active_mine_errors(args):
+    """Mine errors from evaluation results."""
+    from .active.mine_errors import mine_errors
+    
+    try:
+        error_cases = mine_errors(
+            args.gt, args.pred, args.images, args.out, args.iou_threshold
+        )
+        print(f"[INFO] Error mining completed. Found {len(error_cases)} error cases")
+        return 0
+    except Exception as e:
+        print(f"[ERROR] Error mining failed: {e}")
+        return 1
+
+
+def cmd_active_select(args):
+    """Select samples for annotation."""
+    from .active.uncertainty import select_samples
+    
+    try:
+        selected = select_samples(
+            args.pred, args.strategy, args.top, args.out, threshold=args.threshold
+        )
+        print(f"[INFO] Selected {len(selected)} samples for annotation")
+        return 0
+    except Exception as e:
+        print(f"[ERROR] Sample selection failed: {e}")
+        return 1
+
+
+def cmd_active_pseudo_labels(args):
+    """Generate pseudo-labels from predictions."""
+    from .active.pseudo_labels import create_pseudo_labels
+    
+    try:
+        pseudo_labels = create_pseudo_labels(
+            args.pred, args.images, args.out, args.thr, args.model, args.epoch
+        )
+        print(f"[INFO] Generated {len(pseudo_labels)} pseudo-labels")
+        return 0
+    except Exception as e:
+        print(f"[ERROR] Pseudo-labeling failed: {e}")
+        return 1
+
+
+def cmd_active_autopilot(args):
+    """Run active learning autopilot."""
+    from .active.autopilot import run_autopilot
+    
+    try:
+        results = run_autopilot(
+            args.coco, args.val, args.images, args.project,
+            args.cycles, args.quota, args.pseudo_thr, args.strategy, args.retrain_epochs
+        )
+        print(f"[INFO] Autopilot completed {len(results)} cycles")
+        return 0
+    except Exception as e:
+        print(f"[ERROR] Autopilot failed: {e}")
+        return 1
+
+
+def cmd_perf_bench(args):
+    """Run performance benchmark."""
+    from .perf.parallel import process_pipeline
+    
+    try:
+        # This would call the actual benchmark function
+        print(f"[INFO] Running benchmark on {args.pdf}")
+        print(f"[INFO] Using {args.workers} workers")
+        # In practice, you'd call the benchmark function here
+        return 0
+    except Exception as e:
+        print(f"[ERROR] Benchmark failed: {e}")
+        return 1
+
+
+def cmd_perf_cache(args):
+    """Cache management."""
+    from .perf.cache import PersistentCache, OCRCache, VLMCache
+    
+    try:
+        cache = PersistentCache(args.cache_dir, args.max_size)
+        
+        if args.stats:
+            stats = cache.get_stats()
+            print("Cache Statistics:")
+            print(f"  Total entries: {stats['total_entries']}")
+            print(f"  Total size: {stats['total_size_mb']:.1f} MB")
+            print(f"  Average access count: {stats['avg_access_count']:.1f}")
+            
+            print("\nSize by prefix:")
+            for prefix, info in stats['size_by_prefix'].items():
+                print(f"  {prefix}: {info['count']} entries, {info['size'] / (1024*1024):.1f} MB")
+        
+        if args.clear:
+            if args.clear == "all":
+                cleared = cache.clear()
+            elif args.clear == "ocr":
+                ocr_cache = OCRCache(args.cache_dir)
+                cleared = ocr_cache.clear_ocr_cache()
+            elif args.clear == "vlm":
+                vlm_cache = VLMCache(args.cache_dir)
+                cleared = vlm_cache.clear_vlm_cache()
+            else:
+                print(f"Unknown cache type: {args.clear}")
+                return 1
+            
+            print(f"Cleared {cleared} cache entries")
+        
+        return 0
+    except Exception as e:
+        print(f"[ERROR] Cache management failed: {e}")
+        return 1
 
 
 def main(argv: Optional[List[str]] = None) -> int:

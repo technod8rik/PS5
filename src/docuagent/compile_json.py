@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 from .ocr_lang import Element
 

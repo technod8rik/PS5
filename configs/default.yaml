@@ -48,8 +48,40 @@ eval:
   save_overlays: true
   topk_errors: 150
 
+# Active learning configuration
+active:
+  quota_per_cycle: 500
+  pseudo_thr: 0.6
+  strategy: "margin"  # margin | entropy | low_conf
+  iou_threshold: 0.5
+  retrain_epochs: 20
+
+# Calibration configuration
+calibration:
+  enabled: true
+  method: "temperature"  # temperature | platt | isotonic
+  iou_threshold: 0.5
+
+# Performance optimization
+perf:
+  cache: true
+  num_workers: 4
+  max_cache_size_mb: 1000
+  parallel_processing: true
+  batch_ocr: true
+
+# Description QA configuration
+qa:
+  max_words: 80
+  min_words: 3
+  check_language: true
+  check_numerics: true
+  check_structure: true
+  check_repetition: true
+
 # Paths
 paths:
   weights_dir: "./weights"
   runs_dir: "./runs"
   debug_dir: "./debug"
+  cache_dir: "./.cache"

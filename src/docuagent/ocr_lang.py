@@ -3,7 +3,7 @@
 import os
 import urllib.request
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 import cv2
 import numpy as np
 from dataclasses import dataclass
@@ -17,7 +17,7 @@ class Element:
     """Document element with content and metadata."""
     page: int
     cls: str  # Text/Title/List/Table/Figure
-    bbox: tuple[int, int, int, int]  # HBB [x, y, w, h]
+    bbox: Tuple[int, int, int, int]  # HBB [x, y, w, h]
     content: str | None  # text for textual classes, else None
     language: str | None
     meta: dict  # optional: confidences, etc.

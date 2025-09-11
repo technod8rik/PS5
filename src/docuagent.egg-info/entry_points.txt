@@ -1,0 +1,2 @@
+[console_scripts]
+docuagent = docuagent.cli:main
