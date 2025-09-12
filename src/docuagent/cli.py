@@ -304,6 +304,47 @@ def cmd_data_subset(args):
         return 1
 
 
+def cmd_data_ingest_ps5(args):
+    """Ingest PS5 dataset to YOLO/COCO formats."""
+    import subprocess
+    import sys
+    from pathlib import Path
+    
+    # Get the script path relative to the project root
+    script_path = Path(__file__).parent.parent.parent / "scripts" / "ingest_all_ps5.py"
+    
+    if not script_path.exists():
+        print(f"[ERROR] PS5 ingest script not found at {script_path}")
+        return 1
+    
+    # Build command arguments
+    cmd_args = [
+        sys.executable, str(script_path),
+        "--src", args.src,
+        "--out", args.out,
+        "--split", str(args.split[0]), str(args.split[1]), str(args.split[2]),
+        "--seed", str(args.seed),
+        "--map", args.map
+    ]
+    
+    if args.resume:
+        cmd_args.append("--resume")
+    
+    print(f"[INFO] Running PS5 dataset ingestion...")
+    print(f"[INFO] Command: {' '.join(cmd_args)}")
+    
+    try:
+        result = subprocess.run(cmd_args, check=True)
+        print("[INFO] PS5 dataset ingestion completed successfully")
+        return 0
+    except subprocess.CalledProcessError as e:
+        print(f"[ERROR] PS5 dataset ingestion failed with exit code {e.returncode}")
+        return 1
+    except Exception as e:
+        print(f"[ERROR] PS5 dataset ingestion failed: {e}")
+        return 1
+
+
 # Training commands
 def cmd_train_yolo(args):
     """Train YOLO model."""
@@ -592,6 +633,18 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     subset_parser.add_argument("--stratify", action="store_true", help="Use stratified sampling")
     subset_parser.add_argument("--stratify-key", default="language", help="Key to stratify on")
     subset_parser.set_defaults(func=cmd_data_subset)
+    
+    # PS5 dataset ingest
+    ps5_ingest_parser = data_subparsers.add_parser("ingest-ps5", help="Ingest PS5 dataset to YOLO/COCO formats")
+    ps5_ingest_parser.add_argument("--src", required=True, help="Source directory with images and JSON files")
+    ps5_ingest_parser.add_argument("--out", required=True, help="Output root directory")
+    ps5_ingest_parser.add_argument("--split", nargs=3, type=float, default=[0.9, 0.1, 0.0], 
+                                   help="Train/val/test split ratios")
+    ps5_ingest_parser.add_argument("--seed", type=int, default=42, help="Random seed for deterministic splits")
+    ps5_ingest_parser.add_argument("--resume", action="store_true", help="Resume from .done index")
+    ps5_ingest_parser.add_argument("--map", default="1:Text,2:Title,3:List,4:Table,5:Figure",
+                                   help="Original ID to name mapping")
+    ps5_ingest_parser.set_defaults(func=cmd_data_ingest_ps5)
     
     # Training commands
     train_parser = subparsers.add_parser("train", help="Training commands")
