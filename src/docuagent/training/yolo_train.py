@@ -342,3 +342,104 @@ def save_best_weights(weights_path: str, output_dir: str, model_name: str = "doc
     print(f"[INFO] Best weights saved to {saved_weights}")
     
     return str(saved_weights)
+
+
+def dry_run(data_yaml: str, n: int = 32) -> Dict[str, Any]:
+    """
+    Perform a dry run on a subset of the dataset to validate data loading.
+    
+    Args:
+        data_yaml: Path to YOLO data.yaml file
+        n: Number of images to test (default: 32)
+        
+    Returns:
+        Dict with dry run results
+    """
+    try:
+        from ultralytics import YOLO
+        import torch
+        from pathlib import Path
+        
+        print(f"[DRY RUN] Testing data loading with {n} images...")
+        
+        # Load a lightweight model for testing
+        model = YOLO('yolov10n.pt')
+        
+        # Load dataset
+        dataset = model._setup_dataset(data_yaml)
+        
+        # Get a subset of images
+        if hasattr(dataset, 'im_files'):
+            test_files = dataset.im_files[:n]
+        else:
+            test_files = []
+        
+        print(f"[DRY RUN] Found {len(test_files)} test images")
+        
+        # Test data loading
+        dataloader = model._setup_dataloader(dataset, batch=min(4, n), imgsz=960)
+        
+        # Test forward pass
+        results = {
+            "status": "OK",
+            "images_tested": len(test_files),
+            "dataloader_created": True,
+            "forward_pass": False,
+            "errors": []
+        }
+        
+        try:
+            # Test a few batches
+            for i, batch in enumerate(dataloader):
+                if i >= 3:  # Test only first 3 batches
+                    break
+                
+                # Check batch structure
+                if isinstance(batch, (list, tuple)) and len(batch) >= 2:
+                    imgs, targets = batch[0], batch[1]
+                    
+                    # Check image shapes
+                    if isinstance(imgs, torch.Tensor):
+                        results["image_shape"] = list(imgs.shape)
+                        results["image_dtype"] = str(imgs.dtype)
+                    
+                    # Check target shapes
+                    if isinstance(targets, torch.Tensor):
+                        results["target_shape"] = list(targets.shape)
+                        results["target_dtype"] = str(targets.dtype)
+                    
+                    # Test forward pass
+                    with torch.no_grad():
+                        preds = model.model(imgs)
+                        results["forward_pass"] = True
+                        results["prediction_shape"] = [list(p.shape) for p in preds] if isinstance(preds, (list, tuple)) else [list(preds.shape)]
+                
+                print(f"[DRY RUN] Batch {i+1} processed successfully")
+        
+        except Exception as e:
+            results["status"] = "FAIL"
+            results["errors"].append(f"Forward pass failed: {str(e)}")
+            print(f"[DRY RUN] Forward pass failed: {e}")
+        
+        # Validate results
+        if results["status"] == "OK" and results["forward_pass"]:
+            print(f"[DRY RUN] ✅ All tests passed")
+            print(f"[DRY RUN] Image shape: {results.get('image_shape', 'Unknown')}")
+            print(f"[DRY RUN] Target shape: {results.get('target_shape', 'Unknown')}")
+            print(f"[DRY RUN] Prediction shape: {results.get('prediction_shape', 'Unknown')}")
+        else:
+            print(f"[DRY RUN] ❌ Tests failed")
+            for error in results["errors"]:
+                print(f"[DRY RUN] Error: {error}")
+        
+        return results
+        
+    except Exception as e:
+        print(f"[DRY RUN] ❌ Dry run failed: {e}")
+        return {
+            "status": "FAIL",
+            "images_tested": 0,
+            "dataloader_created": False,
+            "forward_pass": False,
+            "errors": [str(e)]
+        }

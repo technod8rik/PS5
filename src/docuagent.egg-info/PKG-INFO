@@ -277,3 +277,47 @@ This pipeline extends the existing RAG starter (`starter.py`) by providing enhan
 - **Text Processing**: Character Error Rate (CER), Word Error Rate (WER)
 - **Language ID**: Accuracy, confusion matrix, per-language metrics
 - **Description Quality**: BLEU score, BERTScore for VLM outputs
+
+## Pre-Upload Data Quality Check
+
+The system now includes comprehensive pre-upload data quality checks to ensure your dataset is ready for training:
+
+### Data Quality Audit
+
+```bash
+# Comprehensive data quality check with auto-fixing
+python cli.py preupload --images data/images --labels data/labels --schema yolo --fix --out data_clean
+
+# Check specific aspects only
+python cli.py preupload --images data/images --labels data/labels --schema yolo --no-pii --no-rtl
+
+# Dry run validation
+python cli.py dry-run --coco data/annotations.json --images data/images --n 32
+```
+
+### Quality Checks Include
+
+- **Dataset Audit**: Image/label counts, quality issues, duplicates, class imbalance
+- **PII Scanning**: Automatic detection of personally identifiable information
+- **RTL/Rotation Analysis**: Right-to-left script detection and page rotation analysis
+- **License Checking**: Compliance and attribution requirements
+- **Data Cleaning**: Automatic fixing of common issues
+- **Comprehensive Reporting**: Detailed Markdown reports with visualizations
+
+### Lock Configuration
+
+The system now generates `configs/lock.yaml` with SHA256 hash for reproducible training:
+
+```bash
+# Training with locked configuration
+python cli.py train yolo --coco data/splits/train.json --images data/images --val data/splits/val.json
+# Prints: SHA256: a1b2c3d4e5f6...
+```
+
+### Quality Assurance Features
+
+- **Deterministic Seeds**: All random seeds locked for reproducibility
+- **Data Validation**: Comprehensive validation of cleaned datasets
+- **Error Analysis**: Visual overlays and detailed error reports
+- **Compliance Checking**: License and attribution requirements
+- **Preprocessing Recommendations**: RTL and rotation-specific suggestions

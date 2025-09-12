@@ -678,6 +678,30 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     overlays_parser.add_argument("--config", default="configs/default.yaml", help="Configuration file")
     overlays_parser.set_defaults(func=cmd_viz_overlays)
     
+    # Pre-upload check command
+    preupload_parser = subparsers.add_parser('preupload', help='Pre-upload data quality check')
+    preupload_parser.add_argument('--images', required=True, help='Path to images directory')
+    preupload_parser.add_argument('--labels', required=True, help='Path to labels (YOLO dir or COCO json)')
+    preupload_parser.add_argument('--schema', choices=['yolo', 'coco'], required=True, help='Dataset schema')
+    preupload_parser.add_argument('--classes', nargs='+', default=['Text', 'Title', 'List', 'Table', 'Figure'], help='Class names')
+    preupload_parser.add_argument('--fix', action='store_true', help='Apply automatic fixes')
+    preupload_parser.add_argument('--out', default='data_clean', help='Output directory for cleaned data')
+    preupload_parser.add_argument('--config', help='Path to config file')
+    preupload_parser.add_argument('--sample-rate', type=float, default=0.03, help='Fraction of images to sample for RTL/rotation analysis')
+    preupload_parser.add_argument('--no-pii', action='store_true', help='Skip PII scanning')
+    preupload_parser.add_argument('--no-rtl', action='store_true', help='Skip RTL/rotation analysis')
+    preupload_parser.add_argument('--no-license', action='store_true', help='Skip license checking')
+    preupload_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
+    preupload_parser.set_defaults(func=cmd_preupload_check)
+    
+    # Dry run command
+    dryrun_parser = subparsers.add_parser('dry-run', help='Dry run training data validation')
+    dryrun_parser.add_argument('--coco', help='Path to COCO JSON file')
+    dryrun_parser.add_argument('--images', help='Path to images directory')
+    dryrun_parser.add_argument('--data-yaml', help='Path to YOLO data.yaml file')
+    dryrun_parser.add_argument('--n', type=int, default=32, help='Number of images to test')
+    dryrun_parser.set_defaults(func=cmd_dry_run)
+    
     return parser.parse_args(argv)
 
 
@@ -826,6 +850,200 @@ def cmd_perf_cache(args):
         return 0
     except Exception as e:
         print(f"[ERROR] Cache management failed: {e}")
+        return 1
+
+
+def cmd_preupload_check(args):
+    """Pre-upload data quality check."""
+    from .data.audit import audit_dataset, save_audit_results
+    from .data.pii_scan import scan_pii, generate_pii_report
+    from .data.rtl_rot_check import check_rtl_rotation, generate_rtl_report
+    from .data.license_check import check_licenses, generate_license_report
+    from .data.clean import apply_auto_fixes, validate_cleaned_data
+    from .data.report import generate_preupload_report
+    import time
+    
+    try:
+        print("🔍 Starting pre-upload data quality check...")
+        start_time = time.time()
+        
+        # 1. Dataset Audit
+        print("1️⃣ Running dataset audit...")
+        audit_results = audit_dataset(
+            images_dir=args.images,
+            labels=args.labels,
+            schema=args.schema,
+            class_names=args.classes,
+            fix=args.fix
+        )
+        
+        # Save audit results
+        output_dir = Path(args.out)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        save_audit_results(audit_results, output_dir)
+        
+        print(f"✅ Audit complete. Found {len(audit_results.get('duplicates', []))} duplicates")
+        
+        # 2. PII Scanning
+        if not args.no_pii:
+            print("\n2️⃣ Scanning for PII...")
+            pii_results = scan_pii(
+                filenames=[str(f) for f in Path(args.images).glob("*.jpg")],
+                output_path=str(output_dir / "pii_findings.json")
+            )
+            print(f"✅ PII scan complete. Found {pii_results['summary']['total_findings']} PII instances")
+        else:
+            print("\n2️⃣ Skipping PII scan")
+            pii_results = {"summary": {"total_findings": 0, "files_with_pii": 0}}
+        
+        # 3. RTL/Rotation Analysis
+        if not args.no_rtl:
+            print("\n3️⃣ Analyzing RTL and rotation...")
+            rtl_results = check_rtl_rotation(
+                images_dir=args.images,
+                sample_rate=args.sample_rate,
+                output_path=str(output_dir / "rtl_rot_report.json"),
+                config_path=args.config
+            )
+            print(f"✅ RTL/rotation analysis complete. "
+                  f"RTL: {rtl_results['summary']['rtl_percentage']:.1f}%, "
+                  f"Skewed: {rtl_results['summary']['skewed_percentage']:.1f}%")
+        else:
+            print("\n3️⃣ Skipping RTL/rotation analysis")
+            rtl_results = {"summary": {"rtl_percentage": 0, "skewed_percentage": 0}}
+        
+        # 4. License Check
+        if not args.no_license:
+            print("\n4️⃣ Checking licenses...")
+            license_results = check_licenses(
+                data_root=args.images,
+                output_path=str(output_dir / "license_report.json")
+            )
+            print(f"✅ License check complete. "
+                  f"Licensed folders: {license_results['summary']['licensed_folders']}")
+        else:
+            print("\n4️⃣ Skipping license check")
+            license_results = {"compliance_status": {"has_license": False}}
+        
+        # 5. Data Cleaning (if requested)
+        if args.fix:
+            print("\n5️⃣ Applying automatic fixes...")
+            clean_results = apply_auto_fixes(
+                audit_result=audit_results,
+                images_dir=args.images,
+                labels=args.labels,
+                schema=args.schema,
+                out_dir=args.out
+            )
+            print(f"✅ Cleaning complete. "
+                  f"Cleaned: {clean_results['cleaned_images']} images, "
+                  f"{clean_results['cleaned_labels']} labels")
+            
+            # Validate cleaned data
+            print("\n6️⃣ Validating cleaned data...")
+            validation_results = validate_cleaned_data(
+                cleaned_dir=args.out,
+                schema=args.schema,
+                class_names=args.classes
+            )
+            if validation_results["validation_passed"]:
+                print("✅ Validation passed")
+            else:
+                print(f"⚠️ Validation failed: {len(validation_results['issues_found'])} issues found")
+        else:
+            print("\n5️⃣ Skipping data cleaning (use --fix to enable)")
+        
+        # 6. Generate Report
+        print("\n7️⃣ Generating comprehensive report...")
+        report_path = generate_preupload_report(
+            audit_results=audit_results,
+            pii_results=pii_results,
+            rtl_results=rtl_results,
+            license_results=license_results,
+            output_dir=args.out,
+            sample_images=[str(f) for f in Path(args.images).glob("*.jpg")][:20]
+        )
+        print(f"✅ Report generated: {report_path}")
+        
+        # 7. Summary
+        elapsed_time = time.time() - start_time
+        print(f"\n🎉 Pre-upload check complete in {elapsed_time:.1f}s")
+        
+        # Determine overall status
+        critical_issues = (
+            len(audit_results.get("image_sanity", {}).get("unreadable", [])) +
+            len(audit_results.get("label_sanity", {}).get("invalid_coords", [])) +
+            pii_results["summary"]["total_findings"]
+        )
+        
+        needs_attention = (
+            rtl_results["summary"]["rtl_percentage"] > 20 or
+            rtl_results["summary"]["skewed_percentage"] > 10 or
+            not license_results["compliance_status"]["has_license"]
+        )
+        
+        if critical_issues == 0 and not needs_attention:
+            print("✅ Status: READY FOR UPLOAD")
+            return 0
+        else:
+            print("⚠️ Status: NEEDS ATTENTION")
+            if critical_issues > 0:
+                print(f"   - {critical_issues} critical issues found")
+            if needs_attention:
+                print("   - Dataset needs preprocessing or compliance review")
+            return 1
+        
+    except Exception as e:
+        print(f"❌ Error during pre-upload check: {e}")
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        return 1
+
+
+def cmd_dry_run(args):
+    """Dry run training data validation."""
+    from .training.yolo_train import dry_run
+    from .data.converters import coco_to_yolo
+    from pathlib import Path
+    import tempfile
+    import shutil
+    
+    try:
+        if args.data_yaml:
+            # Direct YOLO data.yaml provided
+            data_yaml = args.data_yaml
+        elif args.coco and args.images:
+            # Convert COCO to YOLO first
+            print("Converting COCO to YOLO format...")
+            with tempfile.TemporaryDirectory() as temp_dir:
+                coco_to_yolo(
+                    coco_json_path=args.coco,
+                    out_dir=temp_dir,
+                    class_names=["Text", "Title", "List", "Table", "Figure"]
+                )
+                data_yaml = Path(temp_dir) / "data.yaml"
+                if not data_yaml.exists():
+                    print("❌ Failed to create data.yaml")
+                    return 1
+        else:
+            print("❌ Either --data-yaml or (--coco and --images) must be provided")
+            return 1
+        
+        # Run dry run
+        results = dry_run(data_yaml, args.n)
+        
+        if results["status"] == "OK":
+            print("✅ Dry run passed")
+            return 0
+        else:
+            print("❌ Dry run failed")
+            for error in results["errors"]:
+                print(f"   - {error}")
+            return 1
+            
+    except Exception as e:
+        print(f"❌ Dry run failed: {e}")
         return 1
 
 

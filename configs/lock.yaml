@@ -1,0 +1,86 @@
+# Lock configuration for reproducible training
+# This file captures all training parameters and random seeds
+# SHA256: [will be calculated and printed during training]
+
+# Dataset configuration
+dataset:
+  classes: ["Text", "Title", "List", "Table", "Figure"]
+  imgsz: 960
+  schema: "yolo"  # or "coco"
+
+# Training configuration
+training:
+  backend: "yolov10"  # or "pp_doclayout_l"
+  model: "yolov10n.pt"  # or yolov10s.pt, yolov10m.pt, yolov10l.pt
+  epochs: 60
+  batch: 16
+  lr0: 0.01
+  weight_decay: 0.0005
+  momentum: 0.937
+  warmup_epochs: 3
+  warmup_momentum: 0.8
+  warmup_bias_lr: 0.1
+
+# Detection configuration
+detection:
+  conf_thr: 0.25
+  iou_nms: 0.5
+  max_det: 300
+  agnostic_nms: false
+
+# Data augmentation
+augmentation:
+  hsv_h: 0.015
+  hsv_s: 0.7
+  hsv_v: 0.4
+  degrees: 0.0
+  translate: 0.1
+  scale: 0.5
+  shear: 0.0
+  perspective: 0.0
+  flipud: 0.0
+  fliplr: 0.5
+  mosaic: 1.0
+  mixup: 0.0
+  copy_paste: 0.0
+
+# Random seeds for reproducibility
+seeds:
+  python_hash_seed: 0
+  numpy_seed: 42
+  torch_seed: 42
+  paddle_seed: 42
+  random_seed: 42
+
+# Paths
+paths:
+  data_root: "./data"
+  weights_dir: "./weights"
+  runs_dir: "./runs"
+  debug_dir: "./debug"
+  cache_dir: ".cache"
+
+# Environment
+environment:
+  device: "auto"  # "cuda", "cpu", or "auto"
+  num_workers: 4
+  pin_memory: true
+  deterministic: true
+
+# Evaluation configuration
+evaluation:
+  val_every: 1
+  save_period: 10
+  plots: true
+  save_json: true
+  save_hybrid: false
+  verbose: true
+
+# Logging
+logging:
+  project: "docuagent"
+  name: "layout_detection"
+  exist_ok: true
+  resume: false
+  save_dir: "./runs"
+  log_level: "INFO"
