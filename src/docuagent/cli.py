@@ -307,37 +307,111 @@ def cmd_data_subset(args):
 # Training commands
 def cmd_train_yolo(args):
     """Train YOLO model."""
-    print(f"[INFO] Training YOLO model: {args.coco}")
+    from .training.yolo_train import prepare_yolo_dataset, train_yolo, save_best_weights
+    from .config import load_config
+    from pathlib import Path
+    import tempfile
+    import shutil
     
     try:
+        # Load configuration
         cfg = load_config(args.config)
         
-        # Prepare dataset
-        work_dir = Path(args.out) / "yolo_dataset"
-        data_yaml = prepare_yolo_dataset(args.coco, args.images, str(work_dir), cfg["train"]["classes"])
+        # Determine data source
+        if args.data:
+            # Direct YOLO data.yaml provided
+            data_yaml = args.data
+            print(f"[TRAIN] Using YOLO data.yaml: {data_yaml}")
+        elif args.coco and args.images:
+            # Convert COCO to YOLO first
+            print(f"[TRAIN] Converting COCO to YOLO format...")
+            work_dir = args.out or "temp_yolo"
+            data_yaml = prepare_yolo_dataset(
+                coco_json=args.coco,
+                images_dir=args.images,
+                work_dir=work_dir,
+                class_names=cfg["layout"]["classes"]
+            )
+        else:
+            print("❌ Either --data or (--coco and --images) must be provided")
+            return 1
         
         # Train model
-        weights = train_yolo(
-            data_yaml, 
-            args.model, 
-            args.imgsz, 
-            args.epochs, 
-            args.batch, 
-            args.lr0, 
-            args.project, 
-            args.name,
-            cfg["device"]
+        print(f"[TRAIN] Starting YOLO training...")
+        results = train_yolo(
+            data_yaml=data_yaml,
+            model=args.model,
+            imgsz=args.imgsz,
+            epochs=args.epochs,
+            batch=args.batch,
+            lr0=args.lr0,
+            project=args.project,
+            name=args.name
         )
         
         # Save best weights
-        if weights:
-            best_weights = save_best_weights(weights, cfg["paths"]["weights_dir"])
-            print(f"[INFO] Best weights saved to {best_weights}")
+        best_weights = save_best_weights(
+            weights_path=results["best_weights"],
+            output_dir=cfg["paths"]["weights_dir"],
+            model_name="doclayout_yolov10_best.pt"
+        )
         
-        print("[INFO] YOLO training completed")
+        print(f"[TRAIN] Training completed. Best weights saved to {best_weights}")
         return 0
+        
     except Exception as e:
-        print(f"[ERROR] YOLO training failed: {e}")
+        print(f"[ERROR] Training failed: {e}")
+        return 1
+
+
+def cmd_train_yolo_from_coco(args):
+    """Train YOLO model from COCO format."""
+    from .training.yolo_train import prepare_yolo_dataset, train_yolo, save_best_weights
+    from .config import load_config
+    from pathlib import Path
+    import tempfile
+    import shutil
+    
+    try:
+        # Load configuration
+        cfg = load_config(args.config)
+        
+        # Convert COCO to YOLO format
+        print(f"[TRAIN] Converting COCO to YOLO format...")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Prepare dataset
+            data_yaml = prepare_yolo_dataset(
+                coco_json=args.coco_train,
+                images_dir=args.images,
+                work_dir=temp_dir,
+                class_names=cfg["layout"]["classes"]
+            )
+            
+            # Train model
+            print(f"[TRAIN] Starting YOLO training...")
+            results = train_yolo(
+                data_yaml=data_yaml,
+                model=args.model,
+                imgsz=args.imgsz,
+                epochs=args.epochs,
+                batch=args.batch,
+                lr0=0.01,
+                project=args.project,
+                name=args.name
+            )
+            
+            # Save best weights
+            best_weights = save_best_weights(
+                weights_path=results["best_weights"],
+                output_dir=cfg["paths"]["weights_dir"],
+                model_name="doclayout_yolov10_best.pt"
+            )
+            
+            print(f"[TRAIN] Training completed. Best weights saved to {best_weights}")
+            return 0
+        
+    except Exception as e:
+        print(f"[ERROR] Training failed: {e}")
         return 1
 
 
@@ -525,10 +599,11 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     
     # YOLO training
     yolo_train_parser = train_subparsers.add_parser("yolo", help="Train YOLO model")
-    yolo_train_parser.add_argument("--coco", required=True, help="Training COCO JSON")
-    yolo_train_parser.add_argument("--images", required=True, help="Images directory")
+    yolo_train_parser.add_argument("--coco", help="Training COCO JSON")
+    yolo_train_parser.add_argument("--data", help="YOLO data.yaml file")
+    yolo_train_parser.add_argument("--images", help="Images directory")
     yolo_train_parser.add_argument("--val", help="Validation COCO JSON")
-    yolo_train_parser.add_argument("--out", required=True, help="Output directory")
+    yolo_train_parser.add_argument("--out", help="Output directory")
     yolo_train_parser.add_argument("--config", default="configs/default.yaml", help="Configuration file")
     yolo_train_parser.add_argument("--model", default="yolov10n.pt", help="YOLO model")
     yolo_train_parser.add_argument("--imgsz", type=int, default=960, help="Image size")
@@ -537,7 +612,22 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     yolo_train_parser.add_argument("--lr0", type=float, default=0.01, help="Initial learning rate")
     yolo_train_parser.add_argument("--project", default="runs", help="Project directory")
     yolo_train_parser.add_argument("--name", default="doclayout", help="Run name")
+    yolo_train_parser.add_argument("--device", help="Device (cuda/cpu/auto)")
     yolo_train_parser.set_defaults(func=cmd_train_yolo)
+    
+    # YOLO training from COCO
+    yolo_coco_parser = train_subparsers.add_parser("yolo-from-coco", help="Train YOLO model from COCO format")
+    yolo_coco_parser.add_argument("--coco-train", required=True, help="COCO training JSON")
+    yolo_coco_parser.add_argument("--coco-val", required=True, help="COCO validation JSON")
+    yolo_coco_parser.add_argument("--images", required=True, help="Images directory")
+    yolo_coco_parser.add_argument("--imgsz", type=int, default=960, help="Image size")
+    yolo_coco_parser.add_argument("--epochs", type=int, default=60, help="Number of epochs")
+    yolo_coco_parser.add_argument("--batch", type=int, default=16, help="Batch size")
+    yolo_coco_parser.add_argument("--model", default="yolov10n.pt", help="YOLO model")
+    yolo_coco_parser.add_argument("--project", default="runs/doclayout", help="Project directory")
+    yolo_coco_parser.add_argument("--name", default="seed", help="Run name")
+    yolo_coco_parser.add_argument("--device", help="Device (cuda/cpu/auto)")
+    yolo_coco_parser.set_defaults(func=cmd_train_yolo_from_coco)
     
     # PP-DocLayout training
     ppdoc_train_parser = train_subparsers.add_parser("ppdoc", help="Train PP-DocLayout model")
@@ -701,6 +791,18 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     dryrun_parser.add_argument('--data-yaml', help='Path to YOLO data.yaml file')
     dryrun_parser.add_argument('--n', type=int, default=32, help='Number of images to test')
     dryrun_parser.set_defaults(func=cmd_dry_run)
+    
+    # Custom ingest command
+    ingest_parser = subparsers.add_parser('ingest-custom', help='Ingest per-image JSON format to YOLO/COCO')
+    ingest_parser.add_argument('--dir', required=True, help='Source directory with images and JSON files')
+    ingest_parser.add_argument('--out', required=True, help='Output directory')
+    ingest_parser.add_argument('--split', nargs=3, type=float, default=[0.9, 0.1, 0.0], help='Train/val/test split ratios')
+    ingest_parser.add_argument('--id-base', default='auto', help='ID base for remapping (auto, 0, or 1)')
+    ingest_parser.add_argument('--id-to-name', help='ID to name mapping (e.g., "1:Text 2:Title 3:List 4:Table 5:Figure")')
+    ingest_parser.add_argument('--seed', type=int, default=42, help='Random seed for splits')
+    ingest_parser.add_argument('--no-coco', action='store_true', help='Skip COCO format creation')
+    ingest_parser.add_argument('--no-yolo', action='store_true', help='Skip YOLO format creation')
+    ingest_parser.set_defaults(func=cmd_ingest_custom)
     
     return parser.parse_args(argv)
 
@@ -1044,6 +1146,68 @@ def cmd_dry_run(args):
             
     except Exception as e:
         print(f"❌ Dry run failed: {e}")
+        return 1
+
+
+def cmd_ingest_custom(args):
+    """Ingest per-image JSON format to YOLO/COCO."""
+    from .data.ingest_custom import ingest_perimage_json
+    
+    try:
+        # Parse ID to name mapping if provided
+        id_to_name = None
+        if args.id_to_name:
+            id_to_name = {}
+            for mapping in args.id_to_name.split():
+                if ':' in mapping:
+                    id_str, name = mapping.split(':', 1)
+                    id_to_name[int(id_str)] = name
+        
+        # Parse ID base
+        id_base = args.id_base
+        if id_base not in ['auto']:
+            try:
+                id_base = int(id_base)
+            except ValueError:
+                print(f"❌ Invalid id-base: {args.id_base}")
+                return 1
+        
+        # Run ingestion
+        results = ingest_perimage_json(
+            src_dir=args.dir,
+            out_root=args.out,
+            split=tuple(args.split),
+            id_base=id_base,
+            id_to_name=id_to_name,
+            seed=args.seed,
+            make_coco=not args.no_coco,
+            make_yolo=not args.no_yolo
+        )
+        
+        # Print summary
+        print(f"\n📊 Ingestion Summary:")
+        print(f"   Images processed: {results['images_processed']}")
+        print(f"   Total boxes: {results['total_boxes']}")
+        print(f"   Dropped boxes: {results['dropped_boxes']}")
+        print(f"   Class names: {results['class_names']}")
+        print(f"   ID mapping: {results['id_mapping']}")
+        print(f"   Split counts: {results['split_counts']}")
+        
+        if 'data_yaml' in results:
+            print(f"   YOLO data.yaml: {results['data_yaml']}")
+        
+        if 'coco_files' in results:
+            print(f"   COCO files: {results['coco_files']}")
+        
+        print(f"   Category mapping: {results['cat_map']}")
+        print(f"   Debug overlays: {results['debug_overlays']}")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Ingestion failed: {e}")
+        import traceback
+        traceback.print_exc()
         return 1
 
 

@@ -285,3 +285,70 @@ python cli.py train yolo --coco data/splits/train.json --images data/images --va
 - **Error Analysis**: Visual overlays and detailed error reports
 - **Compliance Checking**: License and attribution requirements
 - **Preprocessing Recommendations**: RTL and rotation-specific suggestions
+
+## PS5 Dataset Integration
+
+The system now includes a custom ingester for the PS5 "Intelligent Multilingual Document Understanding" dataset:
+
+### Ingest PS5 Dataset
+
+```bash
+# Ingest per-image JSON format to YOLO/COCO
+docuagent data ingest-custom \
+  --dir "/home/akshar/PS5/data/PS 5 Intelligent Multilingual Document Understanding/extracted_data/train" \
+  --out data/ps5_ingested \
+  --split 0.9 0.1 0.0 \
+  --id-base auto
+
+# With custom class names
+docuagent data ingest-custom \
+  --dir "/home/akshar/PS5/data/PS 5 Intelligent Multilingual Document Understanding/extracted_data/train" \
+  --out data/ps5_ingested \
+  --id-to-name "1:Text 2:Title 3:List 4:Table 5:Figure" \
+  --split 0.9 0.1 0.0
+```
+
+### Complete PS5 Training Workflow
+
+```bash
+# 1. Ingest dataset
+docuagent data ingest-custom \
+  --dir "/home/akshar/PS5/data/PS 5 Intelligent Multilingual Document Understanding/extracted_data/train" \
+  --out data/ps5_ingested \
+  --split 0.9 0.1 0.0 \
+  --id-base auto
+
+# 2. Quality check
+docuagent data preupload \
+  --images data/ps5_ingested/yolo/images \
+  --labels data/ps5_ingested/yolo/labels \
+  --schema yolo \
+  --classes $(cat data/ps5_ingested/yolo/names.txt || echo) \
+  --fix --out data_ps5_clean
+
+# 3. Dry run validation
+docuagent train dry-run --coco data/ps5_ingested/coco/train.json --images data/ps5_ingested/yolo/images
+
+# 4. Train model
+docuagent train yolo \
+  --data data/ps5_ingested/yolo/data.yaml \
+  --imgsz 1280 --epochs 80 --batch 16 --model yolov10s.pt \
+  --project runs/doclayout --name ps5_seed
+
+# Alternative: Train from COCO
+docuagent train yolo-from-coco \
+  --coco-train data/ps5_ingested/coco/train.json \
+  --coco-val data/ps5_ingested/coco/val.json \
+  --images data/ps5_ingested/yolo/images \
+  --imgsz 1280 --epochs 80 --batch 16 --model yolov10s.pt
+```
+
+### Custom Ingester Features
+
+- **Per-Image JSON Support**: Handles the PS5 dataset's per-image JSON format
+- **Automatic ID Remapping**: Maps sparse category IDs to contiguous 0-based indices
+- **Class Name Detection**: Automatically detects class names from JSON or generates them
+- **Format Conversion**: Creates both YOLO and COCO formats simultaneously
+- **Data Validation**: Clamps bounding boxes, drops degenerate boxes, validates coordinates
+- **Debug Overlays**: Generates visual overlays for quality checking
+- **Split Management**: Creates train/val/test splits with deterministic seeding
