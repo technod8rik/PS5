@@ -21,3 +21,9 @@ markdown>=3.4.0
 # Pre-upload data quality check dependencies
 imagehash>=4.3.1
 seaborn>=0.11.0
+
+# Additional missing dependencies
+numpy>=1.23
+jsonschema>=4.21.0
+rich>=13.7.0
+ruamel.yaml>=0.18.0

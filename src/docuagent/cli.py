@@ -377,6 +377,10 @@ def cmd_train_yolo(args):
             print("❌ Either --data or (--coco and --images) must be provided")
             return 1
         
+        # Resolve device
+        device = _resolve_device(args.device)
+        print(f"[TRAIN] Using device: {device}")
+        
         # Train model
         print(f"[TRAIN] Starting YOLO training...")
         results = train_yolo(
@@ -387,7 +391,8 @@ def cmd_train_yolo(args):
             batch=args.batch,
             lr0=args.lr0,
             project=args.project,
-            name=args.name
+            name=args.name,
+            device=device
         )
         
         # Save best weights
@@ -1262,6 +1267,18 @@ def cmd_ingest_custom(args):
         import traceback
         traceback.print_exc()
         return 1
+
+
+def _resolve_device(arg: str | None) -> str:
+    """Resolve device argument to valid CUDA device or CPU."""
+    want = (arg or "").strip().lower()
+    if want and want != "auto":
+        return want
+    try:
+        import torch
+        return "0" if torch.cuda.is_available() else "cpu"
+    except Exception:
+        return "cpu"
 
 
 def main(argv: Optional[List[str]] = None) -> int:

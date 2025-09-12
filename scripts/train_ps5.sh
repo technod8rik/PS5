@@ -13,6 +13,30 @@ if [ -f "$CLEAN_ROOT/yolo/data.yaml" ]; then
   DATA_YAML="$CLEAN_ROOT/yolo/data.yaml"
 fi
 
+# --- Device detection (env override respected)
+if [ -z "${DEVICE:-}" ] || [ "${DEVICE:-}" = "auto" ]; then
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    # If torch is available, count CUDA devices
+    CUDA_COUNT=$(python3 - <<'PY' 2>/dev/null || echo 0
+import sys
+try:
+    import torch
+    print(torch.cuda.device_count())
+except Exception:
+    print(0)
+PY
+)
+    if [ "${CUDA_COUNT:-0}" -ge 1 ]; then
+      DEVICE="0"   # default to first GPU
+    else
+      DEVICE="cpu"
+    fi
+  else
+    DEVICE="cpu"
+  fi
+fi
+echo "[info] Using DEVICE=$DEVICE"
+
 echo "USING DATA_YAML: $DATA_YAML"
 
 # ---- Quick split verification (prints counts; does not fail build)
@@ -49,7 +73,7 @@ python3 cli.py train yolo \
   --model "$YOLO_MODEL" \
   --project "$PROJECT" \
   --name "$RUN_NAME" \
-  --device 0
+  --device "$DEVICE"
 
 BEST_PT="$PROJECT/$RUN_NAME/weights/best.pt"
 LAST_PT="$PROJECT/$RUN_NAME/weights/last.pt"
