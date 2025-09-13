@@ -60,3 +60,12 @@ models/
 *.onnx
 *.zip
 data/
+
+# large/unversioned
+data/
+runs/
+weights/
+models/
+*.pt
+*.onnx
+*.zip
