@@ -27,3 +27,12 @@ Thumbs.db
 *.tmp
 *.temp
 data/
+
+# large artifacts
+runs/
+weights/
+models/
+*.pt
+*.onnx
+*.zip
+data/
