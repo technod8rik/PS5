@@ -36,3 +36,11 @@ models/
 *.onnx
 *.zip
 data/
+
+runs/
+weights/
+models/
+*.pt
+*.onnx
+*.zip
+data/
